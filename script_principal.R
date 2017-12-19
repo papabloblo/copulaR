@@ -210,6 +210,7 @@ puntua_cop <- function(datos_train, datos_test, variables2, precision){
   return(errores)
 }
 
+train <- train_kdd
 variables <- names(train)[c(3:20)]
 num_variables <- length(variables)
 max_dim_copulas <- 3
@@ -227,39 +228,48 @@ i <- 1
 num_iter <- 30
 pasos_stepwise <- data.frame()
 iteracion <- 1
-combianciones_variables <- genera_combinaciones_variables(num_variables,
-                                                          max_dim_copulas)
+comb_vars <- genera_combinaciones_variables(num_variables,
+                                            max_dim_copulas)
+
+errores <- list()
 
 while (i <= num_iter){
 
+  errores[[i]][paste0] <-
   assign(paste0('errores_train_var_', i), data.frame())
   assign(paste0('errores_test_var_', i), data.frame())
 
-  for (j in 1:length(combianciones_variables)){
+  if (i == 1){
+    datos_train <- train
+    datos_test <- test
 
-    if (i == 1){
-      datos_train <- train
-      datos_test <- test
+    datos_train <- datos_train %>%
+      mutate(PREDICCION = mean(TargetD),
+             ERROR = (TargetD - PREDICCION)/TargetD)
 
-      datos_train$PREDICCION <- mean(datos_train$TargetD)
-      datos_test$PREDICCION <- mean(datos_train$TargetD)
-      datos_train$ERROR <- (datos_train$TargetD - datos_train$PREDICCION)/datos_train$TargetD
-      datos_test$ERROR <- (datos_test$TargetD - datos_test$PREDICCION)/datos_test$TargetD
-    } else  {
+    datos_test <- datos_test %>%
+      mutate(PREDICCION = mean(TargetD),
+             ERROR = (TargetD - PREDICCION)/TargetD)
 
-      datos_train <- datos_train_fija
-      datos_test <- datos_test_fija
-    }
+  }else{
+    datos_train <- datos_train_fija
+    datos_test <- datos_test_fija
+  }
+
+
+  for (j in 1:length(comb_vars)){
+
+
 
     assign(paste0('errores_', i, '_', j),
            puntua_cop(datos_train,
                       datos_test,
-                      variables[combianciones_variables[[j]]],
+                      variables[comb_vars[[j]]],
                       750)
     )
     assign(paste0('errores_train_var_', i),
            rbind(get(paste0('errores_train_var_', i)),
-                 data.frame(var = paste(variables[combianciones_variables[[j]]], sep = ', '),
+                 data.frame(var = paste(variables[comb_vars[[j]]], sep = ', '),
                             error = ifelse(get(paste0('errores_', i, '_', j))[[3]]$ind_indepCopula==0,
                                            mean(abs(get(paste0('errores_', i, '_', j))[[1]]$ERROR)),
                                            Inf)
@@ -268,7 +278,7 @@ while (i <= num_iter){
     )
     assign(paste0('errores_test_var_', i),
            rbind(get(paste0('errores_test_var_', i)),
-                 data.frame(var = paste(variables[combianciones_variables[[j]]], sep = ', '),
+                 data.frame(var = paste(variables[comb_vars[[j]]], sep = ', '),
                             error = ifelse(get(paste0('errores_', i, '_', j))[[3]]$ind_indepCopula==0,
                                            mean(abs(get(paste0('errores_', i, '_', j))[[2]]$ERROR)),
                                            Inf)
@@ -289,7 +299,7 @@ while (i <= num_iter){
         next
       } else {
         var_quitadas <- c(var_quitadas, as.character(errores_train$var[i]))
-        if (length(var_quitadas)==length(combianciones_variables)){
+        if (length(var_quitadas)==length(comb_vars)){
           errores_train <- data.frame()
           errores_test <- data.frame()
           mejor_num_iteraciones <- pasos_stepwise[which.min(pasos_stepwise$error_test), 'iteracion']
@@ -367,7 +377,7 @@ while (i <= num_iter){
                                            variable = c('',
                                                         '',
                                                         as.character(errores_train$var)[nrow(errores_train)],
-                                                        variables[combianciones_variables[[copula_stepwise_ant]]]),
+                                                        variables[comb_vars[[copula_stepwise_ant]]]),
                                            copula = c('',
                                                       '',
                                                       as.character(get(paste0('errores_', (i - 1), '_', which(variables %in% as.character(errores_train$var)[nrow(errores_train)])))[[3]]$mejor_copula_var),
@@ -477,7 +487,7 @@ while (i <= num_iter){
 
   if ((round(get(paste0('errores_train_var_', i))[ copula_stepwise, 'error'],5) >= round(error_anterior,5)) & (i > 1)){
     var_quitadas <- c(var_quitadas, as.character(errores_train$var[i]))
-    if (length(var_quitadas)==length(combianciones_variables)){
+    if (length(var_quitadas)==length(comb_vars)){
       errores_train <- data.frame()
       errores_test <- data.frame()
       mejor_num_iteraciones <- pasos_stepwise[which.min(pasos_stepwise$error_test), 'iteracion']
