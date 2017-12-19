@@ -235,31 +235,30 @@ errores <- list()
 
 while (i <= num_iter){
 
-  errores[[i]][paste0] <-
   assign(paste0('errores_train_var_', i), data.frame())
   assign(paste0('errores_test_var_', i), data.frame())
 
-  if (i == 1){
-    datos_train <- train
-    datos_test <- test
 
-    datos_train <- datos_train %>%
-      mutate(PREDICCION = mean(TargetD),
-             ERROR = (TargetD - PREDICCION)/TargetD)
-
-    datos_test <- datos_test %>%
-      mutate(PREDICCION = mean(TargetD),
-             ERROR = (TargetD - PREDICCION)/TargetD)
-
-  }else{
-    datos_train <- datos_train_fija
-    datos_test <- datos_test_fija
-  }
 
 
   for (j in 1:length(comb_vars)){
 
+    if (i == 1){
+      datos_train <- train
+      datos_test <- test
 
+      datos_train <- datos_train %>%
+        mutate(PREDICCION = mean(TargetD),
+               ERROR = (TargetD - PREDICCION)/TargetD)
+
+      datos_test <- datos_test %>%
+        mutate(PREDICCION = mean(TargetD),
+               ERROR = (TargetD - PREDICCION)/TargetD)
+
+    }else{
+      datos_train <- datos_train_fija
+      datos_test <- datos_test_fija
+    }
 
     assign(paste0('errores_', i, '_', j),
            puntua_cop(datos_train,
