@@ -9,10 +9,22 @@ library(caTools)
 library(VineCopula)
 library(rapportools)
 
-copula.model <- function(train = NULL,
-                         target = NULL,
-                         valid = NULL,
-                         test = NULL,
+
+# DEPENDECIAS -------------------------------------------------------------
+
+source('genera_combinaciones_variables.R')
+source('copula_optima_BI.R')
+source('puntuacion_copulas_comb.R')
+source('genera_mejor_iter.R')
+source('ajuste_var_cop.R')
+source('eval_metric_functions.R')
+
+
+
+copula.model <- function(train,
+                         target,
+                         valid,
+                         test,
                          num_iter = 10,
                          early_stopping_round = 0,
                          num_sim = 500,
@@ -22,98 +34,79 @@ copula.model <- function(train = NULL,
                          eval_metric  = "MAPE",
                          verbosity = TRUE){
   
-  source('genera_combinaciones_variables.R')
-  source('copula_optima_BI.R')
-  source('puntuacion_copulas_comb.R')
-  source('genera_mejor_iter.R')
-  source('ajuste_var_cop.R')
-  source('eval_metric_functions.R')
   
-  if (is.null(train)){
-    stop('no hay tabla')
-  } else if (!is.null(train)){
-    if (!is.data.frame(train)){
-      stop('gracias por intentarlo')
-    }
-  }
   
-  if (!is.null(valid)){
-    if (!is.data.frame(valid)){
-      stop('gracias por intentarlo')
-    }
-  }
+
+  # ERRORES -----------------------------------------------------------------
   
-  if (!is.null(test)){
-    if (!is.data.frame(test)){
-      stop('gracias por intentarlo')
-    }
-  }
-  
-  if (!is.numeric(num_iter) | (num_iter<=0)){
-    stop('pedazo de mierda')
-  } else if (is.numeric(num_iter) & length(num_iter)>1){
-    stop('pedazo de mierda')
+  if (length(num_iter) > 1) {
+    stop('num_iter must be of length 1')
+  } else if (!is.numeric(num_iter) || num_iter <= 0) {
+    stop('num_iter must be a positive number')
   } else {
     num_iter <- floor(num_iter)
   }
   
-  if (!is.numeric(early_stopping_round) | (early_stopping_round<0)){
-    stop('pedazo de mierda')
-  } else if (is.numeric(early_stopping_round) & length(early_stopping_round)>1){
-    stop('pedazo de mierda')
+  if (length(early_stopping_round) > 1) {
+    stop('early_stopping_round must be of length 1')
+  } else if (!is.numeric(early_stopping_round) || early_stopping_round <= 0) {
+    stop('early_stopping_round must be a positive number')
   } else {
     early_stopping_round <- floor(early_stopping_round)
   }
   
-  if (!is.numeric(num_sim) | (num_sim<=0)){
-    stop('pedazo de mierda')
-  } else if (is.numeric(num_sim) & length(num_sim)>1){
-    stop('pedazo de mierda')
+  if (length(num_sim) > 1) {
+    stop('num_sim must be of length 1')
+  } else if (!is.numeric(num_sim) || num_sim <= 0) {
+    stop('num_sim must be a positive number')
   } else {
     num_sim <- floor(num_sim)
   }
   
-  if (!is.null(max_bins)){
-    if (!is.numeric(max_bins) | (max_bins<=0)){
-      stop('pedazo de mierda')
-    } else if (is.numeric(max_bins) & length(max_bins)>1){
-      stop('pedazo de mierda')
-    } else {
-      max_bins <- floor(max_bins)
-    }
+  if (length(max_bins) > 1) {
+    stop('max_bins must be of length 1')
+  } else if (!is.numeric(max_bins) || max_bins <= 0) {
+    stop('max_bins must be a positive number')
+  } else {
+    max_bins <- floor(max_bins)
   }
   
-  if (!is.null(num_obs_fit)){
-    if (!is.numeric(num_obs_fit) | (num_obs_fit<=0)){
-      stop('pedazo de mierda')
-    } else if (is.numeric(num_obs_fit) & length(num_obs_fit)>1){
-      stop('pedazo de mierda')
-    } else {
-      num_obs_fit <- floor(num_obs_fit)
-    }
+  if (length(num_obs_fit) > 1) {
+    stop('num_obs_fit must be of length 1')
+  } else if (!is.numeric(num_obs_fit) || num_obs_fit <= 0) {
+    stop('num_obs_fit must be a positive number')
+  } else {
+    num_obs_fit <- floor(num_obs_fit)
   }
   
-  if (!is.boolean(bin_target)){
-    stop("quieres mirar lo que estas poniendo")
+  
+  if (!is.logical(bin_target)){
+    stop("bin_taget must be TRUE or FALSE")
   }
   
-  if (!is.boolean(verbosity)){
-    stop("quieres mirar lo que estas poniendo")
+  if (!is.logical(verbosity)){
+    stop("verbosity must be TRUE or FALSE")
   }
   
-  if (is.null(target) | !target %in% names(train)){
-    stop("vaya target de mierda")
+  if ( !(target %in% names(train))){
+    stop("target must be in train")
   }
  
+  
+  
+
   if (is.null(valid) & is.null(test)){
     valid <- train
     test <- train
   } else if (is.null(valid)){
-    valid = train
-    if (length(colnames(test))==length(colnames(train))){
-      if (!(all(length(sort(names(train)))==
-                length(sort(names(test)))) &
-            all(sort(names(train))==
+    valid <- train
+    
+    if (ncol(test) == ncol(train)){
+      
+      if (!(all(length(sort(names(train))) ==
+                length(sort(names(test)))
+                ) &
+            all(sort(names(train)) ==
                 sort(names(test))))){
         stop('nombre_variable')
       }
@@ -163,7 +156,7 @@ copula.model <- function(train = NULL,
                           "RMSE",
                           "MAE",
                           "SMAPE")){
-    stop("que error estas poniendo")
+    stop("eval_metric not available")
   }
 
   colnames(train)[which(colnames(train)==target)] <- "Target"
