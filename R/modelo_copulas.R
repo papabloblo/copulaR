@@ -23,8 +23,8 @@ source('eval_metric_functions.R')
 
 copula.model <- function(train,
                          target,
-                         valid,
-                         test,
+                         valid = train,
+                         test = train,
                          num_iter = 10,
                          early_stopping_round = 0,
                          num_sim = 500,
@@ -93,76 +93,28 @@ copula.model <- function(train,
   }
  
   
-  
-
-  if (is.null(valid) & is.null(test)){
-    valid <- train
-    test <- train
-  } else if (is.null(valid)){
-    valid <- train
-    
-    if (ncol(test) == ncol(train)){
-      
-      if (!(all(length(sort(names(train))) ==
-                length(sort(names(test)))
-                ) &
-            all(sort(names(train)) ==
-                sort(names(test))))){
-        stop('nombre_variable')
-      }
-    } else {
-      if (!(all(length(sort(names(train)[names(train)!=target]))==
-                length(sort(names(test)))) &
-            all(sort(names(train)[names(train)!=target])==
-                sort(names(test))))){
-        stop('nombre_variable')
-      }
-    }
-  } else if (is.null(test)){
-    test = valid
-    if (!(all(length(sort(names(train)))==
-               length(sort(names(valid)))) &
-           all(sort(names(train))==
-                 sort(names(valid))))){
-      stop('nombre_variable')
-    }
-  } else {
-    if (length(colnames(test))==length(colnames(train))){
-      if (!(all(length(sort(names(train)))==
-                length(sort(names(test)))) &
-            all(sort(names(train))==
-                sort(names(test))))){
-        stop('nombre_variable')
-      }
-    } else {
-      if (!(all(length(sort(names(train)[names(train)!=target]))==
-                length(sort(names(test)))) &
-            all(sort(names(train)[names(train)!=target])==
-                sort(names(test))))){
-        stop('nombre_variable')
-      }
-    }
-    if (!(all(length(sort(names(train)))==
-               length(sort(names(valid)))) &
-           all(sort(names(train))==
-                 sort(names(valid))))){
-      stop('nombre_variable')
-    }
-  }
-  
   if (!eval_metric %in% c("MAPE",
                           "MEDAPE",
                           "MSE",
                           "RMSE",
                           "MAE",
                           "SMAPE")){
-    stop("eval_metric not available")
+    stop(paste("eval_metric", eval_metric, "not soported"))
   }
 
-  colnames(train)[which(colnames(train)==target)] <- "Target"
-  colnames(valid)[which(colnames(valid)==target)] <- "Target"
+  if (ncol(test) != ncol(train) || all(sort(names(train)) == sort(names(test)))){
+    stop("test and train don't have the same columns")
+  } 
+  
+  if (ncol(valid) != ncol(train) || all(sort(names(valid)) == sort(names(test)))){
+    stop("valid and train don't have the same columns")
+  } 
+  
+
+  colnames(train)[which(colnames(train) == target)] <- "Target"
+  colnames(valid)[which(colnames(valid) == target)] <- "Target"
   if (target %in% colnames(test)){
-    colnames(test)[which(colnames(test)==target)] <- "Target"
+    colnames(test)[which(colnames(test) == target)] <- "Target"
   } else {
     test$Target <- NA
   }
