@@ -247,6 +247,16 @@ copula.model <- function(train,
         datos_test <- datos_test_fija
       }
       
+      datos_train
+      datos_valid
+      datos_test
+      var_iter = combinaciones_variables[[j]]
+      num_sim
+      max_bins
+      bin_target
+      num_obs_fit
+      
+      # Convertir en lista !!!!
       assign(paste0('errores_', i, '_', j), 
              ajuste_var_cop(datos_train,
                             datos_valid,

@@ -9,58 +9,58 @@ ajuste_var_cop <- function(datos_train,
   
   errores <- list()
   
-  train2 <- datos_train %>% 
-    select_(.dots = var_iter)
-  train2 <- data.frame(train2[!duplicated(train2),])
+  train2 <- unique(train[, var_iter, drop = FALSE])
+  
+  # ¿duplicated más rápido que unique? -> COMPROBAR
+  # train2 <- data.frame(train2[!duplicated(train2),])
   colnames(train2) <- var_iter
   
+  # ¿Por qué if solo si NO HAY NINGUNA VARIABLE UNARIA?
   if (sum(apply(train2,
                 2,
-                function(x){length(unique(x))}) == 1) == 0){
-    train2.5 <- datos_valid %>% 
-      select_(.dots = var_iter)
-    train2.5 <- data.frame(train2.5[!duplicated(train2.5),])
-    colnames(train2.5) <- var_iter
+                function(x){length(unique(x))}
+                ) == 1
+          ) == 0){
     
-    train3 <- datos_test %>%
-      select_(.dots = var_iter)
-    train3 <- data.frame(train3[!duplicated(train3),])
-    colnames(train3) <- var_iter
+    valid2 <- unique(valid[, var_iter, drop = FALSE])
+    test2 <- unique(test[, var_iter, drop = FALSE])
     
-    train2 <- rbind(train2,train2.5, train3)
-    train2 <- data.frame(train2[!duplicated(train2),])
-    colnames(train2) <- var_iter
     
-    variables <- c(var_iter, 'ERROR')
+    train2 <- unique(rbind(train2, valid2, test2))
     
-    train_var <- datos_train %>% 
-      select_(.dots = variables) 
-    train_var <- train_var[!duplicated(train_var),]
     
+    
+    train_var <- unique(cbind(train[, var_iter, drop = FALSE], error = datos_train$error))
+    variables <- colnames(train_var)
+    
+    ########################## ¿?
     if (!is.null(max_bins)){
-      num_valores <- max(c(1,floor(max_bins^(1/(length(var_iter))))))
+      num_valores <- max(c(1, 
+                           floor(max_bins^(1/(length(var_iter))))
+                           )
+                         )
     } else {
       num_valores <- 0
     }
+    ########################## ¿?
+    
     aprox_variables <- list()
-    for (i in 1:(length(var_iter))){
+    for (i in var_iter){
       if (!is.null(max_bins)){
-        aprox_variables[[i]] <- quantile(train2[,i], probs = seq(0,1, length.out = num_valores))
-        train2[,paste0(colnames(train2)[i], '_hist')] <- apply(as.matrix(train2[,i]),
-                                                               1,
-                                                               function(x){
-                                                                 aprox_variables[[i]][which.min(abs(aprox_variables[[i]] - x))]
-                                                               })
+        # ----POR AQUÍ----------
+        aprox_variables[[i]] <- quantile(train2[, i], probs = seq(0, 1, length.out = num_valores))
+        train2[, paste0(colnames(train2)[i], '_hist')] <- dplyr::ntile(train2[, i], num_valores)
         train_var[,i] <- apply(as.matrix(train_var[,i]),
                                1,
                                function(x){
                                  aprox_variables[[i]][which.min(abs(aprox_variables[[i]] - x))]
                                })
       } else {
-        train2[,paste0(colnames(train2)[i], '_hist')] <- train2[,colnames(train2)[i]]
+        train2 <- cbind(train2, train2[, i])
+        colnames(train2)[ncol(train2)] <- paste0(i, '_hist')
       }
-      
     }
+    
     if (!is.null(max_bins)){
       if (bin_target){
         aprox_variables[[length(variables)]] <- quantile(train_var[,length(variables)], probs = seq(0,1, length.out = num_valores))
