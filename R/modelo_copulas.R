@@ -21,6 +21,25 @@ source('eval_metric_functions.R')
 
 
 
+#' Title
+#'
+#' @param train data.frame. 
+#' @param target character
+#' @param valid 
+#' @param test 
+#' @param num_iter 
+#' @param early_stopping_round 
+#' @param num_sim 
+#' @param max_bins 
+#' @param num_obs_fit 
+#' @param bin_target 
+#' @param eval_metric 
+#' @param verbosity 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 copula.model <- function(train,
                          target,
                          valid = train,
@@ -37,7 +56,7 @@ copula.model <- function(train,
   
   
 
-  # ERRORES -----------------------------------------------------------------
+  # ERRORS -----------------------------------------------------------------
   
   if (length(num_iter) > 1) {
     stop('num_iter must be of length 1')
@@ -111,56 +130,72 @@ copula.model <- function(train,
   } 
   
 
-  colnames(train)[which(colnames(train) == target)] <- "Target"
-  colnames(valid)[which(colnames(valid) == target)] <- "Target"
+  if (!is.matrix(train)) train <- as.matrix(train)
+  if (!is.matrix(test)) train <- as.matrix(test)
+  if (!is.matrix(valid)) train <- as.matrix(valid)
+  
+  colnames(train)[colnames(train) == target] <- "target"
+  colnames(valid)[colnames(valid) == target] <- "target"
   if (target %in% colnames(test)){
-    colnames(test)[which(colnames(test) == target)] <- "Target"
+    colnames(test)[colnames(test) == target] <- "target"
   } else {
-    test$Target <- NA
+    test <- cbind(test, NA)
+    colnames(test)[dim(test)[2]] <- "target"
   }
   
-  variables <- names(train)[which(names(train)!="Target")]
+  variables <- setdiff(colnames(train), "target")
   num_variables <- length(variables)
-  max_dim_copulas <- 2 
   
-  errores_train <- data.frame(iter = 0,
-                              error = 0,
-                              var = "")
-  errores_valid <- data.frame(iter = 0,
-                              error = 0,
-                              var = "")
-  errores_test <- data.frame(iter=0,
-                             error = 0,
-                             var = "")
-  pasos_stepwise <- data.frame()
+  ########
+  max_dim_copulas <- 2 
+  #######
+  
+  errors <- data_frame(iter = 0L,
+                        error = 0,
+                        var = character(1))
+  
+  errors_train <- errors
+  errors_valid <- errors
+  errors_test <- errors
+  
+  stepwise <- data_frame()
+  
   iteracion <- 1
-  combinaciones_variables <- genera_combinaciones_variables(num_variables,
-                                                            max_dim_copulas)
-  variables_cruce <- c()
-  for (i in 1:length(combinaciones_variables)){
-    variables_cruce <- c(variables_cruce,
-                         paste0(variables[combinaciones_variables[[i]]], collapse = ', '))
-  }
-  i <- 1
+  
+  combinaciones_variables <- combn(variables, max_dim_copulas - 1, simplify = FALSE)
+  
+  variables_cruce <- unlist(lapply(combinaciones_variables, 
+                                   function(x) paste(x, collapse = ", ")
+                                   )
+                            )
+
+  
   pred_train <- list()
   pred_valid <- list()
   pred_test <- list()
   
-  modelo <- list()
-  modelo[['train']] <- train
-  modelo[['max_bins']] <- max_bins
-  modelo[['num_sim']] <- num_sim
-  modelo[['bin_target']] <- bin_target
-  modelo[['iteraciones']] <- list()
+  modelo <- list(
+    train = train,
+    max_bins = max_bins,
+    num_sim = num_sim,
+    bin_target = bin_target,
+    iteraciones = list()
+  )
+  
+  i <- 1
   
   while (i <= num_iter){
     
+    # comprobar!!!!
     if (i > 1){
-      if (early_stopping_round>0){
+      if (early_stopping_round > 0){
+        
         if ((i - errores_valid[which.min(errores_valid$error), 'iter'] - 2) == 
             early_stopping_round){
+          
           pasos_stepwise <- pasos_stepwise[pasos_stepwise$paso<(iteracion - 1),]
           tablas_output <- genera_mejor_iter(pasos_stepwise, pred_train, pred_valid, pred_test, modelo)
+          
           if ((verbosity) & (nrow(pasos_stepwise[pasos_stepwise$paso==iteracion,])>0)){
             print(pasos_stepwise[pasos_stepwise$paso==iteracion,])
           }
@@ -170,6 +205,7 @@ copula.model <- function(train,
       }
     }
     
+    
     assign(paste0('errores_train_var_', i), data.frame())
     assign(paste0('errores_valid_var_', i), data.frame())
     assign(paste0('errores_test_var_', i), data.frame())
@@ -177,17 +213,19 @@ copula.model <- function(train,
     for (j in 1:length(combinaciones_variables)){
       
       if (i == 1){
-        datos_train <- train
-        datos_valid <- valid
-        datos_test <- test
         
-        datos_train$PREDICCION <- mean(datos_train$Target)
-        datos_valid$PREDICCION <- mean(datos_train$Target)
-        datos_test$PREDICCION <- mean(datos_train$Target)
-        datos_train$ERROR <- (datos_train$Target - datos_train$PREDICCION)/datos_train$Target
-        datos_valid$ERROR <- (datos_valid$Target - datos_valid$PREDICCION)/datos_valid$Target
-        datos_test$ERROR <- (datos_test$Target - datos_test$PREDICCION)/datos_test$Target
+        pred <- mean(train[, "target"])
         
+        datos_train <- list(target = train[, "target"], prediction = pred)
+        datos_train$error <- (datos_train$target - datos_train$pred)/datos_train$target
+        
+        datos_valid <- list(target = valid[, "target"], prediction = pred)
+        datos_valid$error <- (datos_valid$target - datos_valid$pred)/datos_valid$target
+        
+        datos_test  <- list(target = test[,  "target"], prediction = pred)
+        datos_test$error <- (datos_test$target - datos_test$pred)/datos_test$target
+        
+        ###########################
         errores_train$error <- round(eval_metric_functions[[eval_metric]]
                                      (datos_train$Target,
                                        datos_train$PREDICCION,
@@ -202,9 +240,8 @@ copula.model <- function(train,
                                      (datos_test$Target,
                                        datos_test$PREDICCION,
                                        datos_test$ERROR),5)
-        
+        ###############  
       } else  {
-        
         datos_train <- datos_train_fija
         datos_valid <- datos_valid_fija
         datos_test <- datos_test_fija
@@ -214,12 +251,12 @@ copula.model <- function(train,
              ajuste_var_cop(datos_train,
                             datos_valid,
                             datos_test,
-                            variables[combinaciones_variables[[j]]],
+                            combinaciones_variables[[j]],
                             num_sim,
                             max_bins,
                             bin_target,
                             num_obs_fit)
-      )
+             )
       
       assign(paste0('errores_train_var_', i), 
              rbind(get(paste0('errores_train_var_', i)),
@@ -522,366 +559,3 @@ copula.model <- function(train,
   return(tablas_output)
 }
 
-###KDD98##
-train <- read.csv('targetContinuoKDDTrain.csv', 
-                  header = TRUE,
-                  stringsAsFactors = FALSE)
-
-test <- read.csv('Kdd1988targetcontinuoTest.csv', 
-                 header = TRUE,
-                 stringsAsFactors = FALSE)
-
-train$TargetD <- as.numeric(substr(train$TargetD,2, nchar(train$TargetD)))
-train$GiftAvgLast <- as.numeric(substr(train$GiftAvgLast,2, nchar(train$GiftAvgLast)))
-train$GiftAvg36 <- as.numeric(substr(train$GiftAvg36,2, nchar(train$GiftAvg36)))
-train$GiftAvgAll <- as.numeric(substr(train$GiftAvgAll,2, nchar(train$GiftAvgAll)))
-var_aux <- substr(train$DemMedHomeValue,2, nchar(train$DemMedHomeValue))
-train$DemMedHomeValue <- as.numeric(gsub(",", "", var_aux))
-var_aux <- substr(train$DemMedIncome,2, nchar(train$DemMedIncome))
-train$DemMedIncome <- as.numeric(gsub(",", "", var_aux))
-
-test$TargetD <- as.numeric(substr(test$TargetD,2, nchar(test$TargetD)))
-test$GiftAvgLast <- as.numeric(substr(test$GiftAvgLast,2, nchar(test$GiftAvgLast)))
-test$GiftAvg36 <- as.numeric(substr(test$GiftAvg36,2, nchar(test$GiftAvg36)))
-test$GiftAvgAll <- as.numeric(substr(test$GiftAvgAll,2, nchar(test$GiftAvgAll)))
-var_aux <- substr(test$DemMedHomeValue,2, nchar(test$DemMedHomeValue))
-test$DemMedHomeValue <- as.numeric(gsub(",", "", var_aux))
-var_aux <- substr(test$DemMedIncome,2, nchar(test$DemMedIncome))
-test$DemMedIncome <- as.numeric(gsub(",", "", var_aux))
-
-ind_train <- sample(1:nrow(train), 0.7*nrow(train))
-train_tab <- train[ind_train,]
-valid_tab <- train[-ind_train,]
-
-### tablas communities##
-train <- read.csv('communitiestest.csv', 
-                  header = TRUE,
-                  stringsAsFactors = FALSE)
-train <- train[-90,]
-
-ind_train <- sample(1:nrow(train), 0.7*nrow(train))
-train_tab <- train[ind_train,]
-valid_tab <- train[-ind_train,]
-
-test <- read.csv('communitiesTraining.csv', 
-                 header = TRUE,
-                 stringsAsFactors = FALSE)
-
-colnames(train_tab)[ncol(train_tab)] <- 'TargetD'
-colnames(valid_tab)[ncol(valid_tab)] <- 'TargetD'
-colnames(test)[ncol(test)] <- 'TargetD'
-
-###ailerons##
-train_tab <- read.csv('aileronsTrain.csv', 
-                      header = TRUE,
-                      stringsAsFactors = FALSE)
-
-valid_tab <- read.csv('aileronsValidate.csv', 
-                      header = TRUE,
-                      stringsAsFactors = FALSE)
-
-test <- read.csv('aileronsTestSinTarget.csv', 
-                 header = TRUE,
-                 sep = ";",
-                 stringsAsFactors = FALSE)
-
-colnames(train_tab)[ncol(train_tab)] <- 'TargetD'
-colnames(valid_tab)[ncol(valid_tab)] <- 'TargetD'
-test$TargetD <- NA
-
-### elevators ####
-train <- read.csv('elevators.csv', 
-                  header = TRUE,
-                  sep = ";",
-                  stringsAsFactors = FALSE)
-
-ind_train <- sample(1:nrow(train), 0.6*nrow(train))
-train_tab <- train[ind_train,]
-valid_tab <- train[-ind_train,]
-
-ind_test <- sample(1:nrow(valid_tab), 0.5*nrow(valid_tab))
-test <- valid_tab[ind_test,]
-valid_tab <- valid_tab[-ind_test,] 
-
-colnames(train_tab)[ncol(train_tab)] <- 'TargetD'
-colnames(valid_tab)[ncol(valid_tab)] <- 'TargetD'
-colnames(test)[ncol(test)] <- 'TargetD'
-
-modelo <- copula.model(train = train_tab,
-                  valid = valid_tab,
-                  target = "TargetD",
-                  test = NULL,
-                  num_iter = 350,
-                  num_sim = 550,
-                  max_bins = 30,
-                  bin_target = FALSE,
-                  eval_metric = "SMAPE",
-                  num_obs_fit = 350,
-                  early_stopping_round = 2)
-
-predict.copula <- function(score = NULL,
-                           modelo = NULL){
-  if (is.null(score)){
-    stop('sigue asi')
-  } else if (!is.data.frame(score)){
-    stop('cambia eso hombre')
-  }
-  
-  names_modelo <- c("errores_train",
-                    "errores_valid",
-                    "errores_test",
-                    "pasos_stepwise",
-                    "pred_train",
-                    "pred_valid",
-                    "pred_test",
-                    "modelo")
-  
-  if (is.null(modelo)){
-    stop('un modelo hombre')
-  } else if (!(all(length(sort(names(modelo)))==
-                   length(sort(names_modelo))) &
-               all(sort(names(modelo))==
-                   sort(names_modelo)))){
-    stop('un modelo decente')
-  }
-  
-  if (!(all(length(sort(names(modelo$modelo$train)[names(modelo$modelo$train)!="Target"]))==
-            length(sort(names(score)))) &
-        all(sort(names(modelo$modelo$train)[names(modelo$modelo$train)!="Target"])==
-            sort(names(score))))){
-    stop('que variables pasas')
-  }
-  
-  modelo$modelo$train$PREDICCION <- mean(modelo$modelo$train$Target)
-  modelo$modelo$train$ERROR <- (modelo$modelo$train$Target - modelo$modelo$train$PREDICCION)/
-    modelo$modelo$train$Target
-  score$PREDICCION <- mean(modelo$modelo$train$Target)
-  
-  for (i in 1:length(modelo$modelo$iteraciones)){
-    
-    dim_iter <- ncol(modelo$modelo$iteraciones[[i]]$inf_iter) - 1
-    var_iter <- substr(colnames(modelo$modelo$iteraciones[[i]]$inf_iter)[1:dim_iter],
-                       1, 
-                       nchar(colnames(modelo$modelo$iteraciones[[i]]$inf_iter)[1]) - 5)
-    
-    valores_scores <- data.frame(score[!duplicated(score[,var_iter]),var_iter])
-    colnames(valores_scores) <- var_iter
-    
-    if (is.null(modelo$modelo$max_bins)){
-      
-      for (j in 1:dim_iter){
-        if (j == 1){
-          coincidencias <- data.frame(apply(as.matrix(valores_scores[,j]),
-                                 1,
-                                 function(x){x %in% modelo$modelo$iteraciones[[i]]$inf_iter[,j]}))
-        } else {
-          coincidencias <- cbind(coincidencias,
-                                 apply(as.matrix(valores_scores[,j]),
-                                       1,
-                                       function(x){x %in% modelo$modelo$iteraciones[[i]]$inf_iter[,j]}))
-        }
-      }
-      
-      valores_var_nuevos <- data.frame(valores_scores[apply(coincidencias,
-                                  1,
-                                  function(x){sum(x)!=dim_iter}),])
-      
-      if (nrow(valores_var_nuevos)>0){
-        colnames(valores_var_nuevos) <- var_iter
-        
-        variables <- c(var_iter, 'ERROR')
-        
-        train_var <- modelo$modelo$train %>% 
-          select_(.dots = variables) 
-        train_var <- train_var[!duplicated(train_var),]
-        
-        valores_var_nuevos[,paste0(colnames(valores_var_nuevos)[1:dim_iter], '_hist')] <- 
-          valores_var_nuevos[,colnames(valores_var_nuevos)[1:dim_iter]]
-          
-        resultados <- data.frame()
-        
-        n <- nrow(valores_var_nuevos)
-        
-        if ((n*modelo$modelo$num_sim)>=1000000){
-          num_iter <- floor((n*modelo$modelo$num_sim)/1000000) + 1
-          fila_ini <- 1
-          fila_fin <- min(c(floor(fila_ini + (1000000/modelo$modelo$num_sim)),n))
-          for (j in 1:num_iter){
-            train_aux <- valores_var_nuevos[fila_ini:fila_fin,]
-            resultados_aux <- puntuacion_copula_opt(datos_iter = data.frame(train_aux),
-                                                    n.ventas = modelo$modelo$num_sim,
-                                                    copulaoptima=modelo$modelo$iteraciones[[i]]$copula,
-                                                    train =  train_var)
-            resultados <- rbind(resultados, resultados_aux)
-            fila_ini <- fila_fin + 1
-            fila_fin <- min(c(floor(fila_ini + (1000000/modelo$modelo$num_sim)),n))
-          }
-        } else {
-          resultados <- puntuacion_copula_opt(datos_iter = valores_var_nuevos,
-                                              n.ventas = modelo$modelo$num_sim,
-                                              copulaoptima=modelo$modelo$iteraciones[[i]]$copula,
-                                              train =  train_var)
-        }
-        
-        info_iter <-modelo$modelo$iteraciones[[i]]$inf_iter
-        colnames(info_iter)[1:dim_iter] <- var_iter
-        names(resultados)[names(resultados) == 'ERROR'] <- 'ERROR_COP'
-        
-        resultados2 <- rbind(resultados[,c(var_iter, "ERROR_COP")],
-                             info_iter)
-        
-        resultados3 <- modelo$modelo$train %>% left_join(resultados2, by = var_iter)
-        resultados3.5 <- score %>% left_join(resultados2, by = var_iter)
-        resultados3$pred_nueva <- resultados3$PREDICCION/(1-resultados3$ERROR_COP)
-        resultados3$nuevo_error <- (resultados3$Target-resultados3$pred_nueva)/resultados3$Target
-        resultados3.5$pred_nueva <- resultados3.5$PREDICCION/(1-resultados3.5$ERROR_COP)
-        modelo$modelo$train$PREDICCION <- resultados3$pred_nueva
-        modelo$modelo$train$ERROR <- resultados3$nuevo_error
-        score$PREDICCION <- resultados3.5$pred_nueva
-      } else {
-        
-        info_iter <- modelo$modelo$iteraciones[[i]]$inf_iter
-        colnames(info_iter)[1:dim_iter] <- var_iter
-        
-        resultados2 <- info_iter
-        
-        resultados3 <- modelo$modelo$train %>% left_join(resultados2, by = var_iter)
-        resultados3.5 <- score %>% left_join(resultados2, by = var_iter)
-        resultados3$pred_nueva <- resultados3$PREDICCION/(1-resultados3$ERROR_COP)
-        resultados3$nuevo_error <- (resultados3$Target-resultados3$pred_nueva)/resultados3$Target
-        resultados3.5$pred_nueva <- resultados3.5$PREDICCION/(1-resultados3.5$ERROR_COP)
-        modelo$modelo$train$PREDICCION <- resultados3$pred_nueva
-        modelo$modelo$train$ERROR <- resultados3$nuevo_error
-        score$PREDICCION <- resultados3.5$pred_nueva
-        
-      }
-    } else {
-      
-      bins_var <- modelo$modelo$iteraciones[[i]]$aprox_variables
-      
-      variables <- c(var_iter, 'ERROR')
-      
-      train_var <- modelo$modelo$train %>% 
-        select_(.dots = variables) 
-      train_var <- train_var[!duplicated(train_var),]
-      
-      for (j in 1:(length(var_iter))){
-        valores_scores[,paste0(colnames(valores_scores)[j], '_hist')] <- apply(as.matrix(valores_scores[,j]),
-                                                                 1,
-                                                                 function(x){
-                                                                   bins_var[[j]][which.min(abs(bins_var[[j]] - x))]
-                                                                 })
-        train_var[,j] <- apply(as.matrix(train_var[,j]),
-                               1,
-                               function(x){
-                                 bins_var[[j]][which.min(abs(bins_var[[j]] - x))]
-                               })
-      }
-      
-      if (modelo$modelo$bin_target){
-        train_var[,length(variables)] <- apply(as.matrix(train_var[,length(variables)]),
-                                               1,
-                                               function(x){
-                                                 bins_var[[length(variables)]][which.min(abs(bins_var[[length(variables)]] - x))]
-                                               })
-        
-      }
-      
-      for (j in 1:dim_iter){
-        if (j == 1){
-          coincidencias <- data.frame(apply(as.matrix(valores_scores[,paste0(colnames(valores_scores)[j], '_hist')]),
-                                            1,
-                                            function(x){x %in% modelo$modelo$iteraciones[[i]]$inf_iter[,j]}))
-        } else {
-          coincidencias <- cbind(coincidencias,
-                                 apply(as.matrix(valores_scores[,paste0(colnames(valores_scores)[j], '_hist')]),
-                                       1,
-                                       function(x){x %in% modelo$modelo$iteraciones[[i]]$inf_iter[,j]}))
-        }
-      }
-      
-      valores_var_nuevos <- data.frame(valores_scores[apply(coincidencias,
-                                                   1,
-                                                   function(x){sum(x)!=dim_iter}),])
-      
-      if (nrow(valores_var_nuevos)>0){
-        
-        resultados <- data.frame()
-        
-        n <- nrow(valores_var_nuevos)
-        
-        if ((n*modelo$modelo$num_sim)>=1000000){
-          num_iter <- floor((n*modelo$modelo$num_sim)/1000000) + 1
-          fila_ini <- 1
-          fila_fin <- min(c(floor(fila_ini + (1000000/modelo$modelo$num_sim)),n))
-          for (j in 1:num_iter){
-            train_aux <- valores_var_nuevos[fila_ini:fila_fin,]
-            resultados_aux <- puntuacion_copula_opt(datos_iter = data.frame(train_aux),
-                                                    n.ventas = modelo$modelo$num_sim,
-                                                    copulaoptima=modelo$modelo$iteraciones[[i]]$copula,
-                                                    train =  train_var)
-            resultados <- rbind(resultados, resultados_aux)
-            fila_ini <- fila_fin + 1
-            fila_fin <- min(c(floor(fila_ini + (1000000/modelo$modelo$num_sim)),n))
-          }
-        } else {
-          resultados <- puntuacion_copula_opt(datos_iter = valores_var_nuevos,
-                                              n.ventas = modelo$modelo$num_sim,
-                                              copulaoptima=modelo$modelo$iteraciones[[i]]$copula,
-                                              train =  train_var)
-        }
-        
-        info_iter <-modelo$modelo$iteraciones[[i]]$inf_iter
-        colnames(train_var)[1:dim_iter] <- paste0(colnames(train_var)[1:dim_iter], '_hist')
-        train_var[,var_iter] <- modelo$modelo$train[!duplicated(modelo$modelo$train[,variables]),var_iter]
-        info_iter <- rbind(train_var[!duplicated(train_var[,colnames(valores_scores)]),colnames(valores_scores)],
-                           valores_scores[apply(coincidencias,
-                                          1,
-                                          function(x){sum(x)==dim_iter}),]) %>% left_join(info_iter, colnames(info_iter)[1:dim_iter])
-        info_iter <- info_iter[!duplicated(info_iter),]
-        names(resultados)[names(resultados) == 'ERROR'] <- 'ERROR_COP'
-        
-        resultados2 <- rbind(resultados[,c(var_iter, "ERROR_COP")],
-                             info_iter[,c(var_iter, "ERROR_COP")])
-        
-        resultados3 <- modelo$modelo$train %>% left_join(resultados2, by = var_iter)
-        resultados3.5 <- score %>% left_join(resultados2, by = var_iter)
-        resultados3$pred_nueva <- resultados3$PREDICCION/(1-resultados3$ERROR_COP)
-        resultados3$nuevo_error <- (resultados3$Target-resultados3$pred_nueva)/resultados3$Target
-        resultados3.5$pred_nueva <- resultados3.5$PREDICCION/(1-resultados3.5$ERROR_COP)
-        modelo$modelo$train$PREDICCION <- resultados3$pred_nueva
-        modelo$modelo$train$ERROR <- resultados3$nuevo_error
-        score$PREDICCION <- resultados3.5$pred_nueva
-        
-      } else {
-        
-        info_iter <-modelo$modelo$iteraciones[[i]]$inf_iter
-        colnames(train_var)[1:dim_iter] <- paste0(colnames(train_var)[1:dim_iter], '_hist')
-        train_var[,var_iter] <- modelo$modelo$train[!duplicated(modelo$modelo$train[,variables]),var_iter]
-        info_iter <- rbind(train_var[!duplicated(train_var[,colnames(valores_scores)]),colnames(valores_scores)],
-                           valores_scores[apply(coincidencias,
-                                                1,
-                                                function(x){sum(x)==dim_iter}),]) %>% left_join(info_iter, colnames(info_iter)[1:dim_iter])
-        info_iter <- info_iter[!duplicated(info_iter),]
-        
-        resultados2 <- info_iter
-        
-        resultados3 <- modelo$modelo$train %>% left_join(resultados2, by = var_iter)
-        resultados3.5 <- score %>% left_join(resultados2, by = var_iter)
-        resultados3$pred_nueva <- resultados3$PREDICCION/(1-resultados3$ERROR_COP)
-        resultados3$nuevo_error <- (resultados3$Target-resultados3$pred_nueva)/resultados3$Target
-        resultados3.5$pred_nueva <- resultados3.5$PREDICCION/(1-resultados3.5$ERROR_COP)
-        modelo$modelo$train$PREDICCION <- resultados3$pred_nueva
-        modelo$modelo$train$ERROR <- resultados3$nuevo_error
-        score$PREDICCION <- resultados3.5$pred_nueva
-        
-      }
-    }
-  }
-  return(score$PREDICCION)
-}
-
-score <- train_tab
-score$TargetD <- NULL
-punt <- predict.copula(score = score,
-                       modelo = modelo_aux)
