@@ -23,10 +23,10 @@ source('eval_metric_functions.R')
 
 #' Title
 #'
-#' @param train data.frame. 
-#' @param target character
-#' @param valid 
-#' @param test 
+#' @param train numeric matrix. 
+#' @param target character. Cadena de caracteres con el nombre de la variable objetivo.
+#' @param valid numeric matrix.
+#' @param test numeric matrix.
 #' @param num_iter 
 #' @param early_stopping_round 
 #' @param num_sim 
@@ -55,8 +55,7 @@ copula.model <- function(train,
   
   
   
-
-  # ERRORS -----------------------------------------------------------------
+  # errores escalares -------------------------------------------------------
   
   if (length(num_iter) > 1) {
     stop('num_iter must be of length 1')
@@ -98,7 +97,9 @@ copula.model <- function(train,
     num_obs_fit <- floor(num_obs_fit)
   }
   
-  
+
+  # Errores lógicos ---------------------------------------------------------
+
   if (!is.logical(bin_target)){
     stop("bin_taget must be TRUE or FALSE")
   }
@@ -107,21 +108,30 @@ copula.model <- function(train,
     stop("verbosity must be TRUE or FALSE")
   }
   
+
+  # Target en train ---------------------------------------------------------
   if ( !(target %in% names(train))){
     stop("target must be in train")
   }
  
+
+  # eval_metric soportada ---------------------------------------------------
   
-  if (!eval_metric %in% c("MAPE",
-                          "MEDAPE",
-                          "MSE",
-                          "RMSE",
-                          "MAE",
-                          "SMAPE")){
+  if (!eval_metric %in%
+      c("MAPE",
+        "MEDAPE",
+        "MSE",
+        "RMSE",
+        "MAE",
+        "SMAPE")
+      ) {
     stop(paste("eval_metric", eval_metric, "not soported"))
   }
 
-  if (ncol(test) != ncol(train) || all(sort(names(train)) == sort(names(test)))){
+
+  # mismas columnas en train, validación y test -----------------------------
+
+  if (all(sort(names(train)) == sort(names(test)))){
     stop("test and train don't have the same columns")
   } 
   
@@ -129,18 +139,26 @@ copula.model <- function(train,
     stop("valid and train don't have the same columns")
   } 
   
-
-  if (!is.matrix(train)) train <- as.matrix(train)
-  if (!is.matrix(test)) train <- as.matrix(test)
-  if (!is.matrix(valid)) train <- as.matrix(valid)
+  # conversión a matrices ---------------------------------------------------
   
+  if (!is.matrix(train)) train <- as.matrix(train)
+  if (!is.matrix(test)) test <- as.matrix(test)
+  if (!is.matrix(valid)) valid <- as.matrix(valid)
+
+  
+
+  # nombre variable "target" ------------------------------------------------
+  
+  # Se cambia el nombre de la columna target a "target" 
+  # para facilitar el desarrollo
   colnames(train)[colnames(train) == target] <- "target"
   colnames(valid)[colnames(valid) == target] <- "target"
+  
   if (target %in% colnames(test)){
     colnames(test)[colnames(test) == target] <- "target"
   } else {
     test <- cbind(test, NA)
-    colnames(test)[dim(test)[2]] <- "target"
+    colnames(test)[ncol(test)] <- "target"
   }
   
   variables <- setdiff(colnames(train), "target")
@@ -150,30 +168,44 @@ copula.model <- function(train,
   max_dim_copulas <- 2 
   #######
   
-  errors <- data_frame(iter = 0L,
-                        error = 0,
-                        var = character(1))
+
+  # Inicialización ------------------------------------------------
+
+  errors <- 
+    data.frame(
+      iter = 0L,
+      error = 0,
+      var = character(1)
+      )
   
   errors_train <- errors
   errors_valid <- errors
   errors_test <- errors
   
-  stepwise <- data_frame()
+  stepwise <- data.frame()
   
   iteracion <- 1
   
+
+  # combinaciones de variables ----------------------------------------------
+  
   combinaciones_variables <- combn(variables, max_dim_copulas - 1, simplify = FALSE)
   
-  variables_cruce <- unlist(lapply(combinaciones_variables, 
-                                   function(x) paste(x, collapse = ", ")
-                                   )
-                            )
+  variables_cruce <-
+    unlist(
+      lapply(combinaciones_variables, 
+             function(x) paste(x, collapse = ", ")
+             )
+      )
 
+
+  # pred_* ------------------------------------------------------------------
   
   pred_train <- list()
   pred_valid <- list()
   pred_test <- list()
   
+##########  04/12/2018 ##########
   modelo <- list(
     train = train,
     max_bins = max_bins,
@@ -247,14 +279,8 @@ copula.model <- function(train,
         datos_test <- datos_test_fija
       }
       
-      datos_train
-      datos_valid
-      datos_test
+      
       var_iter = combinaciones_variables[[j]]
-      num_sim
-      max_bins
-      bin_target
-      num_obs_fit
       
       # Convertir en lista !!!!
       assign(paste0('errores_', i, '_', j), 
