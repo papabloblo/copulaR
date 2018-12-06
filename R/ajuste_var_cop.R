@@ -1,6 +1,7 @@
 ajuste_var_cop <- function(datos_train,
                            datos_valid,
                            datos_test,
+                           
                            var_iter,
                            num_sim,
                            max_bins,
@@ -44,10 +45,13 @@ ajuste_var_cop <- function(datos_train,
     }
     ########################## ¿?
     
+    
     aprox_variables <- list()
     for (i in var_iter){
+      # Aproximar variables por histograma
       if (!is.null(max_bins)){
         # ----POR AQUÍ----------
+        dplyr::ntile(train2[, i], num_valores)
         aprox_variables[[i]] <- quantile(train2[, i], probs = seq(0, 1, length.out = num_valores))
         train2[, paste0(colnames(train2)[i], '_hist')] <- dplyr::ntile(train2[, i], num_valores)
         train_var[,i] <- apply(as.matrix(train_var[,i]),
