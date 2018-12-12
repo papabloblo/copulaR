@@ -12,12 +12,12 @@ library(rapportools)
 
 # DEPENDECIAS -------------------------------------------------------------
 
-source('genera_combinaciones_variables.R')
-source('copula_optima_BI.R')
-source('puntuacion_copulas_comb.R')
-source('genera_mejor_iter.R')
-source('ajuste_var_cop.R')
-source('eval_metric_functions.R')
+source('R/genera_combinaciones_variables.R')
+source('R/copula_optima_BI.R')
+source('R/puntuacion_copulas_comb.R')
+source('R/genera_mejor_iter.R')
+source('R/ajuste_var_cop.R')
+source('R/eval_metric_functions.R')
 
 
 
@@ -205,7 +205,7 @@ copula.model <- function(train,
   pred_valid <- list()
   pred_test <- list()
   
-##########  04/12/2018 ##########
+
   modelo <- list(
     train = train,
     max_bins = max_bins,
@@ -216,19 +216,31 @@ copula.model <- function(train,
   
   i <- 1
   
+  errores_train_var <- list(data.frame())
+  errores_valid_var <- list(data.frame())
+  errores_test_var_ <- list(data.frame())
+  
+  errores <- list()
+  
+  datos_train_fija <- train
+  datos_valid_fija <- valid
+  datos_test_fija <- test
+  
   while (i <= num_iter){
     
-    # comprobar!!!!
+    # comprobar en la siguiente iteración !!!!!!!!
     if (i > 1){
       if (early_stopping_round > 0){
         
-        if ((i - errores_valid[which.min(errores_valid$error), 'iter'] - 2) == 
-            early_stopping_round){
+        if (
+          # ¿Por qué -2?
+          (i - errors_valid$iter[which.min(errors_valid$error)] - 2) == early_stopping_round
+          ) {
           
-          pasos_stepwise <- pasos_stepwise[pasos_stepwise$paso<(iteracion - 1),]
+          pasos_stepwise <- pasos_stepwise[pasos_stepwise$paso < (iteracion - 1), ]
           tablas_output <- genera_mejor_iter(pasos_stepwise, pred_train, pred_valid, pred_test, modelo)
           
-          if ((verbosity) & (nrow(pasos_stepwise[pasos_stepwise$paso==iteracion,])>0)){
+          if (verbosity & (nrow(pasos_stepwise[pasos_stepwise$paso==iteracion,])>0)){
             print(pasos_stepwise[pasos_stepwise$paso==iteracion,])
           }
           i <- num_iter + 1
@@ -238,11 +250,9 @@ copula.model <- function(train,
     }
     
     
-    assign(paste0('errores_train_var_', i), data.frame())
-    assign(paste0('errores_valid_var_', i), data.frame())
-    assign(paste0('errores_test_var_', i), data.frame())
-    
-    for (j in 1:length(combinaciones_variables)){
+    for (j in seq_along(combinaciones_variables)){
+      
+      var_iter <- combinaciones_variables[[j]]
       
       if (i == 1){
         
@@ -257,33 +267,36 @@ copula.model <- function(train,
         datos_test  <- list(target = test[,  "target"], prediction = pred)
         datos_test$error <- (datos_test$target - datos_test$pred)/datos_test$target
         
-        ###########################
-        errores_train$error <- round(eval_metric_functions[[eval_metric]]
-                                     (datos_train$Target,
-                                       datos_train$PREDICCION,
-                                       datos_train$ERROR),5)
+        errors_train$error <- 
+          eval_metric_functions[[eval_metric]](
+            datos_train$target,
+            datos_train$prediction,
+            datos_train$error
+            )
         
-        errores_valid$error <- round(eval_metric_functions[[eval_metric]]
-                                     (datos_valid$Target,
-                                       datos_valid$PREDICCION,
-                                       datos_valid$ERROR),5)
+        errors_valid$error <- 
+          eval_metric_functions[[eval_metric]](
+            datos_valid$target,
+            datos_valid$prediction,
+            datos_valid$error
+          )
         
-        errores_test$error <- round(eval_metric_functions[[eval_metric]]
-                                     (datos_test$Target,
-                                       datos_test$PREDICCION,
-                                       datos_test$ERROR),5)
-        ###############  
-      } else  {
+        errors_test$error <- 
+          eval_metric_functions[[eval_metric]](
+            datos_test$target,
+            datos_test$prediction,
+            datos_test$error
+          )
+        
+      } else {
         datos_train <- datos_train_fija
         datos_valid <- datos_valid_fija
         datos_test <- datos_test_fija
       }
       
       
-      var_iter = combinaciones_variables[[j]]
       
-      # Convertir en lista !!!!
-      assign(paste0('errores_', i, '_', j), 
+      errores[i] <-  
              ajuste_var_cop(datos_train,
                             datos_valid,
                             datos_test,
@@ -292,7 +305,7 @@ copula.model <- function(train,
                             max_bins,
                             bin_target,
                             num_obs_fit)
-             )
+             
       
       assign(paste0('errores_train_var_', i), 
              rbind(get(paste0('errores_train_var_', i)),

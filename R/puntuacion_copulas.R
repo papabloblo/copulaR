@@ -1,18 +1,31 @@
 
-puntuacion_copula_opt <- function(datos_iter, n.ventas, copulaoptima, train){
+KernelSmoothing.cdf <- function(xx,c0,bw)
+  {
+    # https://github.com/cran/DiagTest3Grp/blob/master/R/KernelSmoothing.cdf.R
+    new.xx <- (c0-xx)/bw
+    ks.prob <- pnorm(new.xx,mean=0,sd=1,lower.tail=TRUE)
+    mean(ks.prob,na.rm=TRUE)
+  }
+
+
+
+puntuacion_copula_opt <- function(datos_iter, 
+                                  n.ventas, 
+                                  copulaoptima, 
+                                  train){
   #ini <- Sys.time()
   d <- ncol(train)
-  Ventas = vector.datos(train[,d], n.ptos = n.ventas)
+  ventas <- vector.datos(train[, d], n.ptos = n.ventas)
+  
   #Barrido de train simulados
-  ptos.sim <- expand.grid(datos_iter[,1:(d-1)],
-                          Ventas)
-  #ptos.sim <- data.frame(ptos.sim)
+  ptos.sim <- expand.grid(datos_iter[, 1:(d - 1)],
+                          ventas)
   
   #C?lculo de CDF para los train simulados
   datos.orig <- list()
   
-  grid.cdf.datos <- matrix(0,nrow = nrow(ptos.sim), ncol = d)
-  grid.datos.orig <- matrix(0,nrow = nrow(ptos.sim), ncol = d)
+  grid.cdf.datos <- matrix(0, nrow = nrow(ptos.sim), ncol = d)
+  grid.datos.orig <- matrix(0, nrow = nrow(ptos.sim), ncol = d)
    
   for (i in 1:d){
     
@@ -55,7 +68,7 @@ puntuacion_copula_opt <- function(datos_iter, n.ventas, copulaoptima, train){
   #names(grid.datos.orig)[1:(d-1)] <- paste(var.indep, '.orig', sep = '')
   #names(grid.datos.orig)[d] <- 'y.orig'
   #grid.cdf.datos <- data.frame(grid.cdf.datos)
-  for (z in 1:(d-1)){
+  for (z in 1:(d - 1)){
     col_aux <- grid.cdf.datos[,z]
     col_aux2 <- ifelse(col_aux<0.99999,col_aux,0.99999)
     col_aux3 <- ifelse(col_aux2>0.00001,col_aux2,0.00001)
@@ -63,19 +76,19 @@ puntuacion_copula_opt <- function(datos_iter, n.ventas, copulaoptima, train){
   }
    
   grid.cdf.datos <- data.table(grid.cdf.datos)
-  var.indep <- names(train)[1:(ncol(train)-1)]
-  names(grid.cdf.datos)[1:(d-1)] <- var.indep
+  var.indep <- colnames(train)[1:(ncol(train) - 1)]
+  names(grid.cdf.datos)[1:(d - 1)] <- var.indep
   names(grid.cdf.datos)[d] <- 'y'
   
   grid.datos.orig <- data.table(grid.datos.orig)
-  names(grid.datos.orig) <- paste(names(train), '.orig', sep = '')
+  names(grid.datos.orig) <- paste(colnames(train), '.orig', sep = '')
   
   names(grid.datos.orig)[1:(d-1)] <- paste(var.indep, '.orig', sep = '')
   names(grid.datos.orig)[d] <- 'y.orig'
   
   #uniq.cdf.datos <- unique(grid.cdf.datos)
 
-  distr.cop <- dCopula(as.matrix(grid.cdf.datos), copulaoptima@copula)
+  distr.cop <- copula::dCopula(u = as.matrix(grid.cdf.datos), copula = copulaoptima)
   #print(Sys.time() - ini)
   #uniq.cdf.datos <- cbind(uniq.cdf.datos, distr.cop)
   #grid.cdf.datos <- grid.cdf.datos %>% left_join(uniq.cdf.datos)

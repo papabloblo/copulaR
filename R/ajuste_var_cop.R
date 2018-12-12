@@ -12,53 +12,54 @@ ajuste_var_cop <- function(datos_train,
   
   train2 <- unique(train[, var_iter, drop = FALSE])
   
-  # ¿duplicated más rápido que unique? -> COMPROBAR
-  # train2 <- data.frame(train2[!duplicated(train2),])
   colnames(train2) <- var_iter
   
-  # ¿Por qué if solo si NO HAY NINGUNA VARIABLE UNARIA?
-  if (sum(apply(train2,
-                2,
-                function(x){length(unique(x))}
-                ) == 1
-          ) == 0){
-    
-    valid2 <- unique(valid[, var_iter, drop = FALSE])
-    test2 <- unique(test[, var_iter, drop = FALSE])
-    
-    
-    train2 <- unique(rbind(train2, valid2, test2))
-    
-    
+  
+  valid2 <- unique(valid[, var_iter, drop = FALSE])
+  test2 <- unique(test[, var_iter, drop = FALSE])
+  
+  train2 <- unique(rbind(train2, valid2, test2))
+
+  if (
+    sum(apply(train2,
+              2,
+              function(x){length(unique(x))}
+              ) == 1
+          ) == 0
+    ){
     
     train_var <- unique(cbind(train[, var_iter, drop = FALSE], error = datos_train$error))
     variables <- colnames(train_var)
     
-    ########################## ¿?
+    
     if (!is.null(max_bins)){
-      num_valores <- max(c(1, 
-                           floor(max_bins^(1/(length(var_iter))))
-                           )
-                         )
+      num_valores <-
+        max(
+          c(1, 
+            floor(max_bins^(1/(length(var_iter))))
+            )
+          )
     } else {
       num_valores <- 0
     }
-    ########################## ¿?
+    
     
     
     aprox_variables <- list()
     for (i in var_iter){
       # Aproximar variables por histograma
       if (!is.null(max_bins)){
-        # ----POR AQUÍ----------
-        dplyr::ntile(train2[, i], num_valores)
+        
         aprox_variables[[i]] <- quantile(train2[, i], probs = seq(0, 1, length.out = num_valores))
-        train2[, paste0(colnames(train2)[i], '_hist')] <- dplyr::ntile(train2[, i], num_valores)
-        train_var[,i] <- apply(as.matrix(train_var[,i]),
+        train2 <- cbind(train2, dplyr::ntile(train2[, i], num_valores))
+        colnames(train2)[ncol(train2)] <- paste0(i, '_hist')
+        
+        train_var[,i] <- apply(train_var[, i, drop = FALSE],
                                1,
                                function(x){
                                  aprox_variables[[i]][which.min(abs(aprox_variables[[i]] - x))]
-                               })
+                                 }
+                               )
       } else {
         train2 <- cbind(train2, train2[, i])
         colnames(train2)[ncol(train2)] <- paste0(i, '_hist')
@@ -87,7 +88,7 @@ ajuste_var_cop <- function(datos_train,
       } else {
         n <- min(c(max_bins, nrow(train2))) 
       }
-      if ((n*num_sim)>=1000000){
+      if ((n*num_sim) >= 1000000){
         num_iter <- floor((n*num_sim)/1000000) + 1
         fila_ini <- 1
         fila_fin <- min(c(floor(fila_ini + (1000000/num_sim)),n))
@@ -102,28 +103,29 @@ ajuste_var_cop <- function(datos_train,
           fila_fin <- min(c(floor(fila_ini + (1000000/num_sim)),n))
         }
       } else {
-        resultados <- puntuacion_copula_opt(datos_iter = train2,
-                                            n.ventas = num_sim,
-                                            copulaoptima=mejor_copula$copulaoptima,
-                                            train =  train_var)
+        resultados <- puntuacion_copula_opt(datos_iter   = train2,
+                                            n.ventas     = num_sim,
+                                            copulaoptima = mejor_copula$copulaoptima,
+                                            train        = train_var
+                                            )
       }
       
       resultados2 <- resultados
       names(resultados2)[names(resultados2) == 'ERROR'] <- 'ERROR_COP'
-      resultados3 <- datos_train %>% left_join(resultados2, by = var_iter)
-      resultados3.5 <- datos_valid %>% left_join(resultados2, by = var_iter)
-      resultados4 <- datos_test %>% left_join(resultados2, by = var_iter)
-      resultados3$pred_nueva <- resultados3$PREDICCION/(1-resultados3$ERROR_COP)
+      resultados3 <- as.data.frame(datos_train) %>% left_join(resultados2, by = var_iter)
+      resultados3.5 <- as.data.frame(datos_valid) %>% left_join(resultados2, by = var_iter)
+      resultados4 <- as.data.frame(datos_test) %>% left_join(resultados2, by = var_iter)
+      resultados3$pred_nueva <- resultados3$prediccion/(1-resultados3$ERROR_COP)
       resultados3$nuevo_error <- (resultados3$Target-resultados3$pred_nueva)/resultados3$Target
-      resultados3.5$pred_nueva <- resultados3.5$PREDICCION/(1-resultados3.5$ERROR_COP)
+      resultados3.5$pred_nueva <- resultados3.5$prediccion/(1-resultados3.5$ERROR_COP)
       resultados3.5$nuevo_error <- (resultados3.5$Target-resultados3.5$pred_nueva)/resultados3.5$Target
-      resultados4$pred_nueva <- resultados4$PREDICCION/(1-resultados4$ERROR_COP)
+      resultados4$pred_nueva <- resultados4$prediccion/(1-resultados4$ERROR_COP)
       resultados4$nuevo_error <- (resultados4$Target-resultados4$pred_nueva)/resultados4$Target
-      datos_train$PREDICCION <- resultados3$pred_nueva
+      datos_train$prediccion <- resultados3$pred_nueva
       datos_train$ERROR <- resultados3$nuevo_error
-      datos_valid$PREDICCION <- resultados3.5$pred_nueva
+      datos_valid$prediccion <- resultados3.5$pred_nueva
       datos_valid$ERROR <- resultados3.5$nuevo_error
-      datos_test$PREDICCION <- resultados4$pred_nueva
+      datos_test$prediccion <- resultados4$pred_nueva
       datos_test$ERROR <- resultados4$nuevo_error
       
       errores[[1]] <- datos_train
@@ -150,12 +152,13 @@ ajuste_var_cop <- function(datos_train,
       errores[[7]] <- list()
     }
   } else {
+    
     errores[[1]] <- data.frame()
     errores[[2]] <- data.frame()
     errores[[3]] <- data.frame()
     errores[[4]] <- data.frame('',
                                ind_indepCopula = 1
-    )
+                               )
     errores[[5]] <- data.frame()
     errores[[6]] <- data.frame()
     errores[[7]] <- list()
